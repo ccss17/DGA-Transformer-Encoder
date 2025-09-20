@@ -4,7 +4,7 @@ import gzip
 import random
 from typing import Iterable, Tuple, List
 
-from .charset import encode_domain
+from charset import encode_domain
 
 LABEL_MAP = {"benign": 0, "dga": 1}
 

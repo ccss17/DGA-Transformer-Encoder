@@ -1,19 +1,46 @@
-# resume & intervals
+"""
+Drop these two files in your repo to fix the warnings/error you hit:
+  - src/dga_transformer_encoder/train.py   (re-written)
+  - src/dga_transformer_encoder/sampler.py (tiny change)
+
+Fixes included
+- BUGFIX: args.ckpt-interval-steps → args.ckpt_interval_steps (AttributeError)
+- AMP v2: torch.cuda.amp.* → torch.amp.* with device='cuda'
+- Sampler warning: stop passing data_source to super().__init__ (future removal)
+- Optional: silence nested-tensor warning from TransformerEncoder (harmless)
+"""
+
+# ============================
+# src/dga_transformer_encoder/train.py
+# ============================
+from __future__ import annotations
 import os
 import json
 import argparse
 import time
+import warnings
 
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import f1_score
 
-from .config import PROFILES
-from .charset import VOCAB_SIZE
-from .model import build_dga_encoder
-from .sampler import StatefulRandomSampler
-from .checkpoint import save_checkpoint, load_checkpoint, DEFAULT_LAST
+from config import PROFILES
+from charset import VOCAB_SIZE
+from model import build_dga_encoder
+from sampler import StatefulRandomSampler
+from checkpoint import (
+    save_checkpoint,
+    load_checkpoint,
+    DEFAULT_LAST,
+    restore_rng_state,
+)
+
+# (Optional) Silence harmless Transformer nested-tensor warning when norm_first=True
+warnings.filterwarnings(
+    "ignore",
+    message="enable_nested_tensor is True, but self.use_nested_tensor is False",
+)
 
 
 class JsonlDataset(Dataset):
@@ -22,15 +49,16 @@ class JsonlDataset(Dataset):
         with open(path, "r", encoding="utf-8") as f:
             for line in f:
                 j = json.loads(line)
-                self.X.append(j["ids"])  # pre-encoded ids
+                self.X.append(j["ids"])  # pre-encoded token ids
                 self.y.append(j["label"])  # 0=benign, 1=dga
 
     def __len__(self):
         return len(self.y)
 
     def __getitem__(self, i):
-        return torch.tensor(self.X[i], dtype=torch.long), torch.tensor(
-            self.y[i], dtype=torch.long
+        return (
+            torch.tensor(self.X[i], dtype=torch.long),
+            torch.tensor(self.y[i], dtype=torch.long),
         )
 
 
@@ -48,12 +76,10 @@ def eval_macro_f1(
     return f1_score(gts, preds, average="macro")
 
 
-if __name__ == "__main__":
+def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", default="data")
-    ap.add_argument(
-        "--size", default="tiny", choices=["tiny", "small", "medium", "heavy"]
-    )
+    ap.add_argument("--size", default="tiny", choices=list(PROFILES.keys()))
     ap.add_argument("--epochs", type=int, default=5)
     ap.add_argument("--batch-size", type=int, default=2048)
     ap.add_argument("--save-dir", default="ckpt")
@@ -68,17 +94,16 @@ if __name__ == "__main__":
     )
     ap.add_argument("--ckpt-interval-steps", type=int, default=200)
     ap.add_argument("--ckpt-interval-seconds", type=int, default=300)
-    ap.add_argument(
-        "--save-best",
-        action="store_true",
-        help="also save best.pt when val improves",
-    )
+    ap.add_argument("--save-best", action="store_true")
     args = ap.parse_args()
+
+    torch.manual_seed(args.seed)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
     prof = PROFILES[args.size]
     os.makedirs(args.save_dir, exist_ok=True)
 
-    # Datasets
+    # Datasets & loaders
     tr = JsonlDataset(os.path.join(args.data, "train.jsonl"))
     va = JsonlDataset(os.path.join(args.data, "val.jsonl"))
     dl_va = DataLoader(
@@ -89,7 +114,6 @@ if __name__ == "__main__":
     )
 
     # Model/optim/loss
-    device = "cuda" if torch.cuda.is_available() else "cpu"
     model = build_dga_encoder(
         args.size, vocab_size=VOCAB_SIZE, max_len=prof.max_len
     ).to(device)
@@ -101,18 +125,20 @@ if __name__ == "__main__":
     )
     loss = nn.CrossEntropyLoss(label_smoothing=prof.label_smoothing)
 
-    # FlashAttention-2 / SDPA
+    # Flash/SDPA hints (best effort)
     try:
         torch.backends.cuda.enable_flash_sdp(True)
         torch.backends.cuda.enable_mem_efficient_sdp(True)
     except Exception:
         pass
 
-    scaler = torch.cuda.amp.GradScaler(enabled=True)
+    # AMP v2 (device=CUDA)
+    scaler = torch.amp.GradScaler(device="cuda", enabled=(device == "cuda"))
 
-    # Resume state
+    # ----- Resume state -----
     start_epoch, global_step, best_f1 = 0, 0, -1.0
     sampler_state = {"seed": args.seed, "epoch": 0, "pos": 0}
+
     last_path = os.path.join(args.save_dir, DEFAULT_LAST)
     resume_path = args.resume
     if resume_path is not None and not os.path.isabs(resume_path):
@@ -131,20 +157,18 @@ if __name__ == "__main__":
         global_step = int(ck.get("global_step", 0))
         best_f1 = float(ck.get("best_f1", -1.0))
         sampler_state = ck.get("sampler", sampler_state)
-        # RNG state
-        from checkpoint import restore_rng_state
-
         restore_rng_state(ck.get("rng", {}))
         print(
             f"[resume] epoch={start_epoch}, global_step={global_step}, best_f1={best_f1:.4f}"
         )
 
-    # Training loop
-    os.makedirs(args.save_dir, exist_ok=True)
-    t_last = time.time()
+    f1 = eval_macro_f1(model, dl_va, device)
+    print(f"baseline: macro-F1={f1:.4f}")
 
+    # ----- Train -----
+    t_last = time.time()
     for epoch in range(start_epoch, args.epochs):
-        # Sampler with state
+        # Sampler for this epoch (resume within-epoch position if present)
         if sampler_state.get("epoch", 0) != epoch:
             sampler_state = {"seed": args.seed, "epoch": epoch, "pos": 0}
         sampler = StatefulRandomSampler(
@@ -169,7 +193,11 @@ if __name__ == "__main__":
                 y.to(device, non_blocking=True),
             )
             opt.zero_grad(set_to_none=True)
-            with torch.cuda.amp.autocast(dtype=torch.bfloat16):
+            with torch.amp.autocast(
+                device_type="cuda",
+                dtype=torch.bfloat16,
+                enabled=(device == "cuda"),
+            ):
                 logits = model(x)
                 l = loss(logits, y)
             scaler.scale(l).backward()
@@ -179,8 +207,8 @@ if __name__ == "__main__":
 
             global_step += 1
 
-            # Periodic checkpoint (time- or step-based)
-            if (global_step % max(1, args.ckpt - interval - steps) == 0) or (
+            # periodic checkpoint — FIXED names
+            if (global_step % max(1, args.ckpt_interval_steps) == 0) or (
                 time.time() - t_last >= args.ckpt_interval_seconds
             ):
                 sampler_state = sampler.state_dict()
@@ -206,7 +234,7 @@ if __name__ == "__main__":
                 )
                 t_last = time.time()
 
-        # End of epoch: validate and save
+        # End-of-epoch validation
         f1 = eval_macro_f1(model, dl_va, device)
         print(f"epoch {epoch}: macro-F1={f1:.4f}")
         if f1 > best_f1:
@@ -228,7 +256,8 @@ if __name__ == "__main__":
                     },
                     os.path.join(args.save_dir, f"{args.size}_best.pt"),
                 )
-        # Save last at epoch boundary (pos resets to 0 next epoch)
+
+        # Save last at epoch boundary and reset sampler pos
         sampler_state = {"seed": args.seed, "epoch": epoch + 1, "pos": 0}
         save_checkpoint(
             last_path,
@@ -250,3 +279,7 @@ if __name__ == "__main__":
             },
             size=args.size,
         )
+
+
+if __name__ == "__main__":
+    main()

@@ -1,8 +1,8 @@
 import argparse
 import os
 
-from .data import balanced_sample, split_train_val_test, save_jsonl
-from .config import PROFILES
+from data import balanced_sample, split_train_val_test, save_jsonl
+from config import PROFILES
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()

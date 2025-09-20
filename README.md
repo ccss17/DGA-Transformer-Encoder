@@ -7,13 +7,7 @@
 uv sync
 
 # Source (GitHub): https://github.com/ExtraHop/DGA-Detection-Training-Dataset
-mkdir -p data/raw
-cd data/raw
-
-curl -L -o dga-training-data-encoded.json.gz \
-  https://github.com/ExtraHop/DGA-Detection-Training-Dataset/raw/refs/heads/main/dga-training-data-encoded.json.gz
-
-cd ../..
+mkdir -p data/raw && cd data/raw && curl -L -o dga-training-data-encoded.json.gz https://github.com/ExtraHop/DGA-Detection-Training-Dataset/raw/refs/heads/main/dga-training-data-encoded.json.gz && cd ../..
 
 ###############################################
 # 1) Prepare splits (train/val/test) from the raw file
@@ -43,20 +37,20 @@ uv run src/dga_transformer_encoder/train.py \
   --data data \
   --epochs 5 \
   --batch-size 2048 \
-  --save-dir ckpt_tiny \
+  --save-dir ckpt_tiny_v2 \
   --save-best \
   --ckpt-interval-steps 200 \
   --ckpt-interval-seconds 180
 
 # Resume after a preemption (last checkpoint is used by default)
-python train.py \
+uv run src/dga_transformer_encoder/train.py \
   --size tiny \
   --data data \
   --save-dir ckpt_tiny \
   --resume
 
 # Small (heavier, still fast on L40S/A100/H100)
-python train.py \
+uv run src/dga_transformer_encoder/train.py \
   --size small \
   --data data \
   --epochs 6 \
@@ -67,9 +61,9 @@ python train.py \
 ###############################################
 # 3) Evaluate on the held-out test set
 ###############################################
-python eval.py \
+uv run src/dga_transformer_encoder/eval.py \
   --data data \
-  --ckpt ckpt_tiny/best.pt
+  --ckpt ckpt_tiny/tiny_best.pt
 
 ###############################################
 # 4) (Optional) Demo with the trained checkpoint
