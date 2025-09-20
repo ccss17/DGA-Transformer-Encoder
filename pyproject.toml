@@ -1,0 +1,80 @@
+[project]
+name = "dga-transformer-encoder"
+# description = "Add your description here"
+authors = [
+    { name = "ccss17", email = "chansol0505@naver.com" }
+]
+readme = "README.md"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+  "scikit-learn>=1.5",
+  "einops>=0.8.0",
+  "numpy>=1.26",
+  "tqdm>=4.66",
+  "wandb>=0.17",
+  "gradio>=4.0",
+  "tldextract>=5.1",
+]
+
+[project.optional-dependencies]
+cu118 = [
+  "torch>=2.7.0",
+  "torchvision>=0.22.0",
+  "torchaudio>=2.7.0",
+]
+cu128 = [
+  "torch>=2.7.0",
+  "torchvision>=0.22.0",
+  "torchaudio>=2.7.0",
+]
+cpu = [
+  "torch>=2.7.0",
+  "torchvision>=0.22.0",
+  "torchaudio>=2.7.0",
+]
+
+[tool.uv]
+# Prevent users from enabling multiple backends at once
+conflicts = [
+  [{ extra = "cpu" }, { extra = "cu118" }],
+  [{ extra = "cpu" }, { extra = "cu128" }],
+  [{ extra = "cu118" }, { extra = "cu128" }],
+]
+
+# Map extras to the correct PyTorch wheel indexes
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cpu",   extra = "cpu"   },
+  { index = "pytorch-cu118", extra = "cu118" },
+  { index = "pytorch-cu128", extra = "cu128" },
+]
+torchvision = [
+  { index = "pytorch-cpu",   extra = "cpu"   },
+  { index = "pytorch-cu118", extra = "cu118" },
+  { index = "pytorch-cu128", extra = "cu128" },
+]
+torchaudio = [
+  { index = "pytorch-cpu",   extra = "cpu"   },
+  { index = "pytorch-cu118", extra = "cu118" },
+  { index = "pytorch-cu128", extra = "cu128" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu118"
+url = "https://download.pytorch.org/whl/cu118"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+# [build-system]
+# requires = ["hatchling"]
+# build-backend = "hatchling.build"
