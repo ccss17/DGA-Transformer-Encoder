@@ -1,0 +1,82 @@
+# pixi environments
+.pixi/*
+!.pixi/config.toml
+
+# Training artifacts
+checkpoints/
+wandb/
+*.pt
+*.pth
+*.bin
+*.ckpt
+
+# Data
+data/
+*.jsonl
+*.json
+*.json.gz
+*.csv
+*.parquet
+
+# HuggingFace deployment files
+upload_to_hf.py
+deploy_to_hf.sh
+hf_space/
+dga-detector/
+HF_DEPLOYMENT.md
+DEPLOYMENT_SUMMARY.md
+
+# HuggingFace token/cache
+.huggingface/
+huggingface_token.txt
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Environment
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Logs
+*.log
+logs/
+*.out
+
+memo.md
+src/dga_transformer_encoder_pixi/
