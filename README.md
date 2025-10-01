@@ -1,3 +1,7 @@
+- https://wandb.ai/cccsss17-xxx/dga-transformer
+- https://huggingface.co/spaces/ccss17/dga-detector
+- https://huggingface.co/ccss17/dga-transformer-encoder
+
 # DGA Transformer Encoder
 
 A transformer-based neural network for detecting Domain Generation Algorithm (DGA) domains used in malware command-and-control infrastructure.
