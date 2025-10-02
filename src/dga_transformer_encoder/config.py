@@ -24,9 +24,6 @@ class Profile:
     # Weight decay curbs weight drift and improves generalization when
     # training on long-running streams.
     weight_decay: float = 0.01
-    # Label smoothing discourages over-confident logits and improves
-    # calibration on noisy threat labels.
-    label_smoothing: float = 0.05
     # Sequence length covers observed second-level domains with spare room for
     # rare longer names.
     max_len: int = 64

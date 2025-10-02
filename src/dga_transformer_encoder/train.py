@@ -77,14 +77,6 @@ def compute_metrics(eval_pred):
     return results
 
 
-def enable_flash_attention() -> None:
-    """Enable optimized CUDA attention kernels for faster training."""
-    try:
-        torch.backends.cuda.enable_flash_sdp(True)
-        torch.backends.cuda.enable_mem_efficient_sdp(True)
-    except Exception:
-        pass
-
 
 def train(
     # Model config
@@ -119,7 +111,7 @@ def train(
     """Train DGA classifier with HuggingFace Trainer + W&B logging."""
     # Set seed for reproducibility
     set_seed(seed)
-    enable_flash_attention()
+    
 
     # Get profile defaults
     profile = PROFILES[size]

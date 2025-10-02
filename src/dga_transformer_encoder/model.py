@@ -176,7 +176,6 @@ class DGAEncoderConfig(PretrainedConfig):
         num_layers: int = 4,
         dropout: float = 0.1,
         ffn_mult: int = 4,
-        num_labels: int = 2,  # Binary classification: DGA vs Normal
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -187,7 +186,7 @@ class DGAEncoderConfig(PretrainedConfig):
         self.num_layers = num_layers
         self.dropout = dropout
         self.ffn_mult = ffn_mult
-        self.num_labels = num_labels
+        self.num_labels = NUM_CLASSES  # Use global constant
 
 
 class DGAEncoderForSequenceClassification(PreTrainedModel):
@@ -293,7 +292,6 @@ def build_model(size: str = "tiny") -> DGAEncoderForSequenceClassification:
         num_layers=prof.num_layers,
         dropout=prof.dropout,
         ffn_mult=prof.ffn_mult,
-        num_labels=2,  # Binary classification
     )
     return DGAEncoderForSequenceClassification(config)
 
