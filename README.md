@@ -1,3 +1,5 @@
+trained on vast.ai with [vastai_quick_setup](https://github.com/ccss17/vastai_quick_setup)
+
 - wandb: https://wandb.ai/cccsss17-xxx/dga-transformer
 - HF spaces(live demo): https://huggingface.co/spaces/ccss17/dga-detector
 - HF models: https://huggingface.co/ccss17/dga-transformer-encoder
@@ -11,6 +13,42 @@ A transformer-based neural network for detecting Domain Generation Algorithm (DG
 **Examples:**
 - **Legitimate domains**: `google.com`, `github.com`, `stackoverflow.com`
 - **DGA domains**: `xjkd8f2h.com`, `qwfp93nx.net`, `h4fk29fd.org`
+
+## Installation
+
+### Prerequisites
+- **Python**: 3.13+
+- **CUDA**: 12.9 (for GPU training)
+- **GPU**: 16GB VRAM recommended (RTX 4060 Ti or better)
+
+### Setup with Pixi
+
+by [Pixi](https://pixi.sh/):
+
+```bash
+pixi install
+```
+
+## Usage
+
+1. Prepare Data
+
+```bash
+pixi run prepare-data
+```
+
+- Reads `data/raw/dga-training-data-encoded.json.gz`
+- Tokenizes domains into character IDs
+- Splits: 80% train, 10% validation, 10% test
+- Saves to `data/train.jsonl`, `data/val.jsonl`, `data/test.jsonl`
+
+2. Train Model
+
+Train with default settings (batch_size=2048):
+
+```bash
+pixi run train
+```
 
 ## Architecture
 
@@ -318,7 +356,7 @@ logits = classifier(pooled)  # [batch, 2]
 
 ## Design Decisions
 
-### 3. Sequence Length: 64 Characters
+### 1. Sequence Length: 64 Characters
 
 **Decision**: `max_len=64`
 
@@ -353,7 +391,7 @@ Alternative analysis for different max_len values:
 
 `pixi run python data_analysis.py`
 
-### 4. Model Depth vs. Width Trade-off
+### 2. Model Depth vs. Width Trade-off
 
 | Profile | Layers | Width (d_model) | Params | Use Case |
 |---------|--------|-----------------|--------|----------|
@@ -364,7 +402,7 @@ Alternative analysis for different max_len values:
 - **Depth** (layers): Captures compositional patterns (character → n-gram → substring → domain structure)
 - **Width** (d_model): Increases representational capacity per layer
 
-### 5. Training Hyperparameters
+### 3. Training Hyperparameters
 
 ```python
 # From config.py - chosen via grid search
@@ -379,41 +417,6 @@ dropout = 0.1          # Prevent co-adaptation
 
 
 
-## Installation
-
-### Prerequisites
-- **Python**: 3.13+
-- **CUDA**: 12.9 (for GPU training)
-- **GPU**: 16GB VRAM recommended (RTX 4060 Ti or better)
-
-### Setup with Pixi
-
-by [Pixi](https://pixi.sh/):
-
-```bash
-pixi install
-```
-
-## Usage
-
-1. Prepare Data
-
-```bash
-pixi run prepare-data
-```
-
-- Reads `data/raw/dga-training-data-encoded.json.gz`
-- Tokenizes domains into character IDs
-- Splits: 80% train, 10% validation, 10% test
-- Saves to `data/train.jsonl`, `data/val.jsonl`, `data/test.jsonl`
-
-2. Train Model
-
-Train with default settings (batch_size=2048):
-
-```bash
-pixi run train
-```
 
 
 
