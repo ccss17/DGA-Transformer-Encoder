@@ -16,11 +16,6 @@ A transformer-based neural network for detecting Domain Generation Algorithm (DG
 
 ## Installation
 
-### Prerequisites
-- **Python**: 3.13+
-- **CUDA**: 12.9 (for GPU training)
-- **GPU**: 16GB VRAM recommended (RTX 4060 Ti or better)
-
 ### Setup with Pixi
 
 by [Pixi](https://pixi.sh/):
@@ -34,6 +29,10 @@ pixi install
 1. Prepare Data
 
 ```bash
+mkdir -p data/raw && cd data/raw
+curl -L -o dga-training-data-encoded.json.gz \
+  https://github.com/ExtraHop/DGA-Detection-Training-Dataset/raw/refs/heads/main/dga-training-data-encoded.json.gz
+cd ../..
 pixi run prepare-data
 ```
 
