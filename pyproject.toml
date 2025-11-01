@@ -2,7 +2,7 @@
 authors = [{name = "ccss17", email = "chansol0505@naver.com"}]
 dependencies = []
 name = "DGA-Transformer-Encoder"
-requires-python = "== 3.12"
+requires-python = "== 3.13"
 version = "0.1.0"
 
 [build-system]
@@ -19,13 +19,12 @@ dga_transformer_encoder = { path = ".", editable = true }
 [tool.pixi.tasks]
 prepare-data = "python -m dga_transformer_encoder.prepare_data data/raw/dga-training-data-encoded.json.gz"
 
-train = "python -m dga_transformer_encoder.train --batch_size 2048"
+train = "python -m dga_transformer_encoder.train --batch-size 512"
 
 eval = "python -m dga_transformer_encoder.eval ./checkpoints/final"
 eval-test = "python -m dga_transformer_encoder.eval ./checkpoints/final --split test --detailed"
 eval-val = "python -m dga_transformer_encoder.eval ./checkpoints/final --split validation"
 predict = "python -m dga_transformer_encoder.eval predict ./checkpoints/final google.com xkwjfpqmz.org"
-
 demo =  "python demo.py"
 
 
