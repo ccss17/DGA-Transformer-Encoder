@@ -1,6 +1,5 @@
-"""Train DGA classifier using HuggingFace Trainer.
-
-This replaces the custom training loop in train.py with HF Trainer, which provides:
+"""
+replaces custom training loop with HF Trainer:
 - Automatic checkpointing and resumption
 - Built-in W&B logging
 - Mixed precision training
@@ -8,14 +7,10 @@ This replaces the custom training loop in train.py with HF Trainer, which provid
 - Early stopping
 - Distributed training support
 
-Usage:
-    pixi run python -m dga_transformer_encoder.train --help
-    pixi run python -m dga_transformer_encoder.train --size tiny --epochs 20
+pixi run python -m dga_transformer_encoder.train --help
+pixi run python -m dga_transformer_encoder.train --size tiny --epochs 20
 """
 
-from __future__ import annotations
-
-import warnings
 from pathlib import Path
 from typing import Optional
 
@@ -35,54 +30,31 @@ from .data import prepare_datasets, create_data_collator
 from .config import PROFILES
 
 
-warnings.filterwarnings(
-    "ignore",
-    message="enable_nested_tensor is True, but self.use_nested_tensor is False",
-)
+def find_latest_checkpoint(output_dir: Path) -> Optional[Path]:
+    if not output_dir.exists():
+        return None
+    
+    checkpoints = list(output_dir.glob("checkpoint-*"))
+    if not checkpoints:
+        return None
+    
+    return max(checkpoints, key=lambda p: int(p.name.split("-")[1]))
 
 
 def compute_metrics(eval_pred):
-    """Compute F1, precision, recall, accuracy using HF evaluate library.
-    Args:
-        eval_pred: Tuple of (predictions, labels) from Trainer.evaluate()
+    """eval_pred: Tuple of (predictions, labels) from Trainer.evaluate()
     """
-    # Load metrics from HF evaluate library
-    metric_f1 = evaluate.load("f1")
-    metric_precision = evaluate.load("precision")
-    metric_recall = evaluate.load("recall")
-    metric_accuracy = evaluate.load("accuracy")
-
     logits, labels = eval_pred
     predictions = np.argmax(logits, axis=-1)
-
-    # Compute all metrics
-    results = {
-        "f1_macro": metric_f1.compute(
-            predictions=predictions, references=labels, average="macro"
-        )["f1"],
-        "f1_binary": metric_f1.compute(
-            predictions=predictions, references=labels, average="binary"
-        )["f1"],
-        "precision": metric_precision.compute(
-            predictions=predictions, references=labels, average="binary"
-        )["precision"],
-        "recall": metric_recall.compute(
-            predictions=predictions, references=labels, average="binary"
-        )["recall"],
-        "accuracy": metric_accuracy.compute(
-            predictions=predictions, references=labels
-        )["accuracy"],
-    }
-
-    return results
-
+    metrics = evaluate.combine(["accuracy", "f1", "precision", "recall"])
+    return metrics.compute(predictions=predictions, references=labels)
 
 
 def train(
     # Model config
     size: str = "tiny",
     # Data
-    data_dir: Path = Path("data"),
+    data_dir: str = "data",
     # Training hyperparameters
     epochs: int = 5,
     batch_size: int = 64,
@@ -107,20 +79,18 @@ def train(
     num_workers: int = 4 * torch.cuda.device_count(),
     # Resume
     resume_from_checkpoint: Optional[Path] = None,
-) -> None:
-    """Train DGA classifier with HuggingFace Trainer + W&B logging."""
-    # Set seed for reproducibility
+):
     set_seed(seed)
-    
 
-    # Get profile defaults
     profile = PROFILES[size]
     lr = learning_rate if learning_rate is not None else profile.lr
     wd = weight_decay if weight_decay is not None else profile.weight_decay
 
+    # Determine run name for W&B and Trainer
+    run_name = wandb_run_name or f"{size}-lr{lr}-bs{batch_size}"
+
     # Initialize W&B if enabled
     if use_wandb:
-        run_name = wandb_run_name or f"{size}-lr{lr}-bs{batch_size}"
         wandb.init(
             project=wandb_project,
             name=run_name,
@@ -144,14 +114,6 @@ def train(
     print(f"Building {size} model")
     model = build_model(size)
 
-    # Count parameters
-    num_params = sum(p.numel() for p in model.parameters())
-    print(f"   Parameters: {num_params:,}")
-
-    # Create data collator
-    data_collator = create_data_collator()
-
-    # Training arguments with W&B integration
     training_args = TrainingArguments(
         # Output
         output_dir=str(output_dir),
@@ -173,13 +135,13 @@ def train(
         # Evaluation
         eval_strategy="steps",
         eval_steps=eval_steps,
-        metric_for_best_model="f1_macro",
+        metric_for_best_model="f1",
         greater_is_better=True,
         # Logging
         logging_dir=str(output_dir / "logs"),
         logging_steps=logging_steps,
         report_to=["wandb"] if use_wandb else ["none"],
-        run_name=wandb_run_name or f"{size}-{lr}",
+        run_name=run_name,
         # System
         dataloader_num_workers=num_workers,
         dataloader_pin_memory=True,
@@ -188,14 +150,14 @@ def train(
         remove_unused_columns=False,  # Keep 'domain' for debugging
     )
 
-    # Initialize Trainer (replaces entire custom training loop!)
+    # Initialize Trainer (replaces entire custom training loop)
     print("Initializing Trainer")
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=datasets["train"],
         eval_dataset=datasets["validation"],
-        data_collator=data_collator,
+        data_collator=create_data_collator(),
         compute_metrics=compute_metrics,
         callbacks=[
             EarlyStoppingCallback(
@@ -204,64 +166,36 @@ def train(
         ],
     )
 
-    # Check if we're resuming from a checkpoint
-    resume_path = resume_from_checkpoint
-    if resume_path is None and output_dir.exists():
-        checkpoints = list(output_dir.glob("checkpoint-*"))
-        if checkpoints:
-            resume_path = max(
-                checkpoints, key=lambda p: int(p.name.split("-")[1])
-            )
+    # auto-detect a checkpoint if the user didn't explicitly specify one
+    if resume_from_checkpoint is None:
+        resume_from_checkpoint = find_latest_checkpoint(output_dir)
 
     # Only evaluate baseline if starting fresh (not resuming)
-    if resume_path is None:
+    if resume_from_checkpoint is None:
         print("\nEvaluating baseline (untrained model)")
         baseline_results = trainer.evaluate(
             datasets["validation"], metric_key_prefix="baseline"
         )
-        print(
-            f"   Baseline F1 (macro): {baseline_results['baseline_f1_macro']:.4f}"
-        )
-        print(
-            f"   Baseline F1 (binary): {baseline_results['baseline_f1_binary']:.4f}"
-        )
-        print(
-            f"   Baseline Accuracy: {baseline_results['baseline_accuracy']:.4f}"
-        )
+        print(f"   {baseline_results}")
 
         # Log baseline to W&B
         if use_wandb:
-            wandb.log(
-                {
-                    "baseline/f1_macro": baseline_results["baseline_f1_macro"],
-                    "baseline/f1_binary": baseline_results[
-                        "baseline_f1_binary"
-                    ],
-                    "baseline/accuracy": baseline_results["baseline_accuracy"],
-                    "baseline/precision": baseline_results[
-                        "baseline_precision"
-                    ],
-                    "baseline/recall": baseline_results["baseline_recall"],
-                }
-            )
+            wandb.log(baseline_results)
     else:
-        print(f"\nResuming from checkpoint: {resume_path}")
+        print(f"\nResuming from checkpoint: {resume_from_checkpoint}")
         print("   (skipping baseline evaluation)")
 
-    # Train (automatic checkpointing, resumption, W&B logging!)
+    # Train (automatic checkpointing, resumption, W&B logging)
     print("\nStarting training")
     print(f"   Total steps: {len(datasets['train']) // batch_size * epochs}")
-
     trainer.train(
-        resume_from_checkpoint=str(resume_path) if resume_path else None
+        resume_from_checkpoint=str(resume_from_checkpoint) if resume_from_checkpoint else None
     )
 
     # Evaluate on test set
     print("\nEvaluating on test set")
     test_results = trainer.evaluate(datasets["test"], metric_key_prefix="test")
-    print(f"   Test F1 (macro): {test_results['test_f1_macro']:.4f}")
-    print(f"   Test F1 (binary): {test_results['test_f1_binary']:.4f}")
-    print(f"   Test Accuracy: {test_results['test_accuracy']:.4f}")
+    print(f"   {test_results}")
 
     # Save final model
     final_path = output_dir / "final"

@@ -22,9 +22,9 @@ prepare-data = "python -m dga_transformer_encoder.prepare_data data/raw/dga-trai
 train = "python -m dga_transformer_encoder.train --batch-size 512"
 
 eval = "python -m dga_transformer_encoder.eval ./checkpoints/final"
-eval-test = "python -m dga_transformer_encoder.eval ./checkpoints/final --split test --detailed"
+eval-test = "python -m dga_transformer_encoder.eval ./checkpoints/final --split test"
 eval-val = "python -m dga_transformer_encoder.eval ./checkpoints/final --split validation"
-predict = "python -m dga_transformer_encoder.eval predict ./checkpoints/final google.com xkwjfpqmz.org"
+predict = "python -m dga_transformer_encoder.predict ./checkpoints/final google.com xkwjfpqmz.org"
 demo =  "python demo.py"
 
 

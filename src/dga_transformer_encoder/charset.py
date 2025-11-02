@@ -15,10 +15,7 @@ VOCAB_SIZE = SPECIAL_OFFSET + len(CHARS)  # include special tokens
 ALLOWED_CHARS = set(stoi)
 
 def normalize_domain(d: str) -> str:
-    """Normalize a raw domain label into charset-safe characters.
-
-    Example: normalize_domain("Example_Domain!") -> "example_domain"
-    Concept: basic text preprocessing step before tokenization.
+    """ex) normalize_domain("Example_Domain!") -> "example_domain"
     """
     d = (d or "").strip().lower()
     return "".join(ch for ch in d if ch in ALLOWED_CHARS)
@@ -26,13 +23,8 @@ def normalize_domain(d: str) -> str:
 def encode_domain(d: str, max_len: int = 64):
     """Convert a domain label into fixed-length token ids.
 
-    Example: encode_domain("abc", max_len=5) -> [1, 2, 3, 4, 0]
-    Example (truncate): encode_domain("abcdef", max_len=4) -> [1, 2, 3, 4]
-    Concept: character tokenization with padding (sequence modelling input).
-
-    Note: the leading CLS token (id=1) is reserved as a sequence summary token,
-    mirroring the common Transformer practice of reading the first position to
-    represent the entire input for classification.
+    ex) encode_domain("abc", max_len=5) -> [1, 2, 3, 4, 0]
+    ex) encode_domain("abcdef", max_len=4) -> [1, 2, 3, 4]
     """
     d = normalize_domain(d)
     ids = [CLS] + [stoi.get(ch, PAD) for ch in d][: max_len - 1]
